@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Interactive Field Mapper</title>
+    <style>
+        :root {
+            --primary: #3498db;
+            --success: #2ecc71;
+            --danger: #e74c3c;
+            --dark: #2c3e50;
+            --bg: #f4f7f6;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            color: #333;
+            overflow: hidden;
+        }
+
+        /* Header Banner */
+        .top-header {
+            background-color: var(--dark);
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            z-index: 10;
+        }
+        .top-header h1 {
+            margin: 0;
+            font-size: 20px;
+        }
+
+        /* Core Workspace Layout */
+        .main-layout {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        /* Left Control Panel */
+        .sidebar {
+            width: 380px;
+            background: white;
+            border-right: 2px solid #cfd8dc;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            box-sizing: border-box;
+        }
+
+        .panel-section {
+            padding: 15px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .panel-section h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: var(--dark);
+            font-size: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Field Target List Elements */
+        .field-list-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            background: #fafbfc;
+        }
+        .field-item {
+            background: white;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 500;
+        }
+        .field-item:hover {
+            border-color: var(--primary);
+            background: #f0f7fc;
+        }
+        .field-item.active {
+            border-color: var(--primary);
+            background: #e1f0fa;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+        }
+        .field-item.mapped {
+            border-color: var(--success);
+            background: #edfbf2;
+        }
+        .coord-badge {
+            font-size: 11px;
+            font-family: monospace;
+            background: #e2e8f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #4a5568;
+        }
+        .field-item.mapped .coord-badge {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        /* Center Canvas Screen */
+        .canvas-workspace {
+            flex: 1;
+            background-color: #eef2f5;
+            overflow: auto;
+            position: relative;
+            padding: 20px;
+        }
+        .image-container-rel {
+            position: relative;
+            display: inline-block;
+        }
+        #target-image {
+            display: block;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        /* Dynamic Visual Interactivity Boxes */
+        .preview-box {
+            position: absolute;
+            border: 2px dashed var(--primary);
+            background: rgba(52, 152, 219, 0.15);
+            pointer-events: none;
+            display: none;
+            z-index: 1000;
+        }
+
+        .rendered-box {
+            position: absolute;
+            border: 2px solid var(--success);
+            background: rgba(46, 204, 113, 0.12);
+            box-sizing: border-box;
+            z-index: 500;
+            min-width: 20px;
+            min-height: 20px;
+        }
+        .rendered-box .box-label {
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            background: rgba(255,255,255,0.9);
+            padding: 1px 4px;
+            border-radius: 3px;
+            pointer-events: none;
+            white-space: nowrap;
+            max-width: calc(100% - 25px);
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Box Utility Actions (Delete & Resize) */
+        .box-delete-btn {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 16px;
+            height: 16px;
+            background: var(--danger);
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 14px;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: bold;
+            user-select: none;
+            z-index: 600;
+        }
+        .box-resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 10px;
+            height: 10px;
+            background: var(--dark);
+            cursor: se-resize;
+            z-index: 600;
+        }
+
+        /* Bottom Markup Output Section */
+        .bottom-output {
+            height: 180px;
+            background: white;
+            border-top: 2px solid #cfd8dc;
+            padding: 15px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        textarea.code-output {
+            flex: 1;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            padding: 10px;
+            border: 1px solid #cbd5e0;
+            border-radius: 4px;
+            background: #f8f9fa;
+            resize: none;
+        }
+
+        /* Layout Elements & Utility Buttons */
+        textarea.input-import {
+            width: 100%;
+            height: 80px;
+            box-sizing: border-box;
+            font-size: 12px;
+            padding: 6px;
+            border: 1px solid #cbd5e0;
+            border-radius: 4px;
+            resize: none;
+        }
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn:hover { background: #2980b9; }
+        .btn-success { background: var(--success); }
+        .btn-success:hover { background: #27ae60; }
+        
+        .flex-row { display: flex; gap: 8px; margin-top: 6px;}
+        .hint-text { font-size: 11px; color: #7f8c8d; margin-top: 4px; line-height: 1.3; }
+    </style>
+</head>
+<body>
+
+    <div class="top-header">
+        <h1>🗺️ Image Mapping Suite - Created by Saleem</h1>
+        <div id="img-specs" style="font-size: 13px; font-weight: 500; opacity: 0.85;">No Image Loaded</div>
+    </div>
+
+    <div class="main-layout">
+        
+        <div class="sidebar">
+            <div class="panel-section">
+                <h3>1. Source Image</h3>
+                <input type="file" id="img-picker" accept="image/*">
+            </div>
+            
+            <div class="panel-section" style="padding-bottom: 10px;">
+                <h3>2. Target Fields Setup</h3>
+                <textarea id="fields-entry" class="input-import" placeholder="Paste line-separated box names here...&#10;Example:&#10;Box 1 - Plan Type&#10;Box 1a - Insured's I.D. Number"></textarea>
+                <div class="flex-row">
+                    <button id="load-fields-btn" class="btn btn-success" style="flex: 1;">Generate Fields List</button>
+                </div>
+                <p class="hint-text">💡 Select a field name below, then draw its boundary directly on the image map viewport.</p>
+            </div>
+
+            <div class="field-list-container" id="fields-list-target">
+                <div style="text-align: center; color: #a0aec0; margin-top: 30px; font-size: 13px;">No fields populated yet.</div>
+            </div>
+        </div>
+
+        <div class="canvas-workspace" id="scroll-frame">
+            <div class="image-container-rel" id="mapping-canvas">
+                <img id="target-image" alt="Load a base asset configuration to deploy mapper canvas...">
+                <div class="preview-box" id="drag-preview"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="bottom-output">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-weight: bold; font-size: 13px; color: var(--dark);">3. Generated HTML Area Map Tags Output</span>
+            <button class="btn" onclick="copyOutputToClipboard()">Copy to Clipboard</button>
+        </div>
+        <textarea class="code-output" id="output-console" readonly placeholder="Markup entries populate dynamically upon bounding box updates..."></textarea>
+    </div>
+
+    <script>
+        // DOM Handles Binding
+        const imgPicker = document.getElementById('img-picker');
+        const targetImage = document.getElementById('target-image');
+        const fieldsEntry = document.getElementById('fields-entry');
+        const loadFieldsBtn = document.getElementById('load-fields-btn');
+        const fieldsListTarget = document.getElementById('fields-list-target');
+        const mappingCanvas = document.getElementById('mapping-canvas');
+        const dragPreview = document.getElementById('drag-preview');
+        const outputConsole = document.getElementById('output-console');
+        const imgSpecs = document.getElementById('img-specs');
+
+        // Master State Storage Enginery Matrix 
+        let fieldsRegistry = []; // Array of { id, name, coords: {x1,y1,x2,y2} or null }
+        let selectedFieldId = null;
+        
+        let isDrawing = false;
+        let startX = 0, startY = 0;
+
+        let isResizing = false;
+        let resizeBoxTarget = null;
+        let resizeStartWidth = 0, resizeStartHeight = 0;
+
+        // 1. Image Import Processing Engine
+        imgPicker.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                targetImage.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        targetImage.onload = function() {
+            imgSpecs.innerText = `Canvas Resolution: ${targetImage.naturalWidth}px × ${targetImage.naturalHeight}px`;
+            clearAllRenderedBoxes();
+            syncStateEngines();
+        };
+
+        // 2. Interactive Left-Hand Menu Generator Array Parser Logic
+        loadFieldsBtn.addEventListener('click', function() {
+            const rawText = fieldsEntry.value.trim();
+            if(!rawText) { alert("Please input field tracking string keys."); return; }
+            
+            const lines = rawText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            
+            // Build fresh clean data arrays keeping existing coordinates tracking match safely if names match
+            const oldRegistry = [...fieldsRegistry];
+            fieldsRegistry = lines.map((line, idx) => {
+                const existing = oldRegistry.find(o => o.name === line);
+                return {
+                    id: 'field_' + idx,
+                    name: line,
+                    coords: existing ? existing.coords : null
+                };
+            });
+
+            renderSidebarFields();
+            rebuildCanvasBoxes();
+            updateHTMLOutputMarkup();
+        });
+
+        function renderSidebarFields() {
+            if(fieldsRegistry.length === 0) {
+                fieldsListTarget.innerHTML = `<div style="text-align: center; color: #a0aec0; margin-top: 30px; font-size:13px;">No fields populated yet.</div>`;
+                return;
+            }
+
+            fieldsListTarget.innerHTML = '';
+            fieldsRegistry.forEach(field => {
+                const div = document.createElement('div');
+                div.className = `field-item ${field.id === selectedFieldId ? 'active' : ''} ${field.coords ? 'mapped' : ''}`;
+                div.dataset.id = field.id;
+                
+                const label = document.createElement('span');
+                label.innerText = field.name;
+                label.style.overflow = 'hidden';
+                label.style.textOverflow = 'ellipsis';
+                label.style.whiteSpace = 'nowrap';
+                label.style.paddingRight = '8px';
+
+                const badge = document.createElement('span');
+                badge.className = 'coord-badge';
+                badge.innerText = field.coords ? `${field.coords.x1},${field.coords.y1},${field.coords.x2},${field.coords.y2}` : 'Empty';
+
+                div.appendChild(label);
+                div.appendChild(badge);
+
+                div.addEventListener('click', () => {
+                    document.querySelectorAll('.field-item').forEach(el => el.classList.remove('active'));
+                    div.classList.add('active');
+                    selectedFieldId = field.id;
+                });
+
+                fieldsListTarget.appendChild(div);
+            });
+        }
+
+        // 3. Drawing Coordinate Traps Engine Logic Matrix
+        mappingCanvas.addEventListener('mousedown', function(e) {
+            if (!targetImage.src || e.target !== targetImage) return;
+            if (!selectedFieldId) { alert("Please select a target field from the left-hand menu panel first."); return; }
+
+            isDrawing = true;
+            const rect = targetImage.getBoundingClientRect();
+            
+            startX = e.pageX - (rect.left + window.scrollX);
+            startY = e.pageY - (rect.top + window.scrollY);
+
+            dragPreview.style.left = `${startX}px`;
+            dragPreview.style.top = `${startY}px`;
+            dragPreview.style.width = '0px';
+            dragPreview.style.height = '0px';
+            dragPreview.style.display = 'block';
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            // Processing Drag-to-Draw Window Configuration
+            if (isDrawing) {
+                const rect = targetImage.getBoundingClientRect();
+                const currentX = Math.max(0, Math.min(rect.width, e.pageX - (rect.left + window.scrollX)));
+                const currentY = Math.max(0, Math.min(rect.height, e.pageY - (rect.top + window.scrollY)));
+
+                const width = currentX - startX;
+                const height = currentY - startY;
+
+                dragPreview.style.width = `${Math.abs(width)}px`;
+                dragPreview.style.height = `${Math.abs(height)}px`;
+                dragPreview.style.left = `${width < 0 ? currentX : startX}px`;
+                dragPreview.style.top = `${height < 0 ? currentY : startY}px`;
+                return;
+            }
+
+            // Processing Live Transform Dimensions Scaling Resize Handles
+            if (isResizing && resizeBoxTarget) {
+                const rect = targetImage.getBoundingClientRect();
+                const boxRect = resizeBoxTarget.getBoundingClientRect();
+                
+                // Track mouse position relative to target box top-left origin coordinates anchor frame points
+                const currentWidth = Math.max(20, e.pageX - boxRect.left);
+                const currentHeight = Math.max(20, e.pageY - boxRect.top);
+
+                const boxLeftInt = parseInt(resizeBoxTarget.style.left);
+                const boxTopInt = parseInt(resizeBoxTarget.style.top);
+
+                // Boundary clipping limitations safeguards
+                const finalWidth = Math.min(currentWidth, rect.width - boxLeftInt);
+                const finalHeight = Math.min(currentHeight, rect.height - boxTopInt);
+
+                resizeBoxTarget.style.width = `${finalWidth}px`;
+                resizeBoxTarget.style.height = `${finalHeight}px`;
+
+                // Sync mutations on-the-fly to primary database object matrices
+                const fieldObj = fieldsRegistry.find(f => f.id === resizeBoxTarget.dataset.fieldId);
+                if (fieldObj) {
+                    fieldObj.coords = {
+                        x1: Math.round(boxLeftInt),
+                        y1: Math.round(boxTopInt),
+                        x2: Math.round(boxLeftInt + finalWidth),
+                        y2: Math.round(boxTopInt + finalHeight)
+                    };
+                    
+                    // Live interface update updates components
+                    const itemEl = document.querySelector(`.field-item[data-id="${fieldObj.id}"] .coord-badge`);
+                    if(itemEl) itemEl.innerText = `${fieldObj.coords.x1},${fieldObj.coords.y1},${fieldObj.coords.x2},${fieldObj.coords.y2}`;
+                    updateHTMLOutputMarkup();
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', function(e) {
+            if (isDrawing) {
+                isDrawing = false;
+                dragPreview.style.display = 'none';
+
+                const rect = targetImage.getBoundingClientRect();
+                const endX = Math.max(0, Math.min(rect.width, e.pageX - (rect.left + window.scrollX)));
+                const endY = Math.max(0, Math.min(rect.height, e.pageY - (rect.top + window.scrollY)));
+
+                const x1 = Math.round(Math.min(startX, endX));
+                const y1 = Math.round(Math.min(startY, endY));
+                const x2 = Math.round(Math.max(startX, endX));
+                const y2 = Math.round(Math.max(startY, endY));
+
+                // Guard against micro clicks
+                if (x2 - x1 < 8 || y2 - y1 < 8) return;
+
+                const activeField = fieldsRegistry.find(f => f.id === selectedFieldId);
+                if (activeField) {
+                    activeField.coords = { x1, y1, x2, y2 };
+                    
+                    // Advance selection forward automatically to next index to accelerate production speed curves
+                    const currentIdx = fieldsRegistry.findIndex(f => f.id === selectedFieldId);
+                    
+                    renderSidebarFields();
+                    rebuildCanvasBoxes();
+                    updateHTMLOutputMarkup();
+
+                    if (currentIdx >= 0 && currentIdx < fieldsRegistry.length - 1) {
+                        selectedFieldId = fieldsRegistry[currentIdx + 1].id;
+                        renderSidebarFields();
+                    }
+                }
+            }
+
+            if (isResizing) {
+                isResizing = false;
+                resizeBoxTarget = null;
+            }
+        });
+
+        // 4. Render Dynamic Elements Directly On Workspace Viewport View
+        function rebuildCanvasBoxes() {
+            clearAllRenderedBoxes();
+
+            fieldsRegistry.forEach(field => {
+                if (!field.coords) return;
+
+                const box = document.createElement('div');
+                box.className = 'rendered-box';
+                box.style.left = `${field.coords.x1}px`;
+                box.style.top = `${field.coords.y1}px`;
+                box.style.width = `${field.coords.x2 - field.coords.x1}px`;
+                box.style.height = `${field.coords.y2 - field.coords.y1}px`;
+                box.dataset.fieldId = field.id;
+
+                const label = document.createElement('div');
+                label.className = 'box-label';
+                label.innerText = field.name;
+
+                const delBtn = document.createElement('div');
+                delBtn.className = 'box-delete-btn';
+                delBtn.innerHTML = '&times;';
+                delBtn.title = "Delete this bounding box coordinate trap context configuration definition element wrapper profile layer frame.";
+                delBtn.addEventListener('click', (evt) => {
+                    evt.stopPropagation();
+                    deleteBoxCoordinates(field.id);
+                });
+
+                const resizeHandle = document.createElement('div');
+                resizeHandle.className = 'box-resize-handle';
+                resizeHandle.addEventListener('mousedown', (evt) => {
+                    evt.stopPropagation();
+                    evt.preventDefault();
+                    isResizing = true;
+                    resizeBoxTarget = box;
+                });
+
+                box.appendChild(label);
+                box.appendChild(delBtn);
+                box.appendChild(resizeHandle);
+                mappingCanvas.appendChild(box);
+            });
+        }
+
+        function deleteBoxCoordinates(fieldId) {
+            const field = fieldsRegistry.find(f => f.id === fieldId);
+            if (field) {
+                field.coords = null;
+                renderSidebarFields();
+                rebuildCanvasBoxes();
+                updateHTMLOutputMarkup();
+            }
+        }
+
+        function clearAllRenderedBoxes() {
+            document.querySelectorAll('.rendered-box').forEach(el => el.remove());
+        }
+
+        function syncStateEngines() {
+            renderSidebarFields();
+            rebuildCanvasBoxes();
+            updateHTMLOutputMarkup();
+        }
+
+        // 5. Code Serialization Compilers Engines
+        function updateHTMLOutputMarkup() {
+            let htmlMarkup = '';
+            fieldsRegistry.forEach(b => {
+                if(b.coords) {
+                    htmlMarkup += `  <area alt="${b.name}" title="${b.name}" href="#" coords="${b.coords.x1},${b.coords.y1},${b.coords.x2},${b.coords.y2}" shape="rect" data-box="${b.name}">\n`;
+                }
+            });
+            outputConsole.value = htmlMarkup;
+        }
+
+        function copyOutputToClipboard() {
+            if(!outputConsole.value.trim()) return;
+            outputConsole.select();
+            document.execCommand('copy');
+            alert("Markup strings copied to system clipboard buffers successfully!");
+        }
+    </script>
+</body>
+</html>
